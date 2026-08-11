@@ -24,7 +24,7 @@ hand_gesture_recognizer_manual/
 ├── main.py               ← main application (webcam loop, drawing, classification)
 ├── joint_angles.py       ← computes 15 joint flexion angles from hand landmarks
 ├── sign_classifier.py    ← 22-dim feature vector + rule-based SASL letter classifier
-├── collect.py            ← data collection tool for SASL training samples
+├── calibrate.py          ← data collection tool for SASL training samples
 ├── models/
 │   ├── hand_landmarker.task       ← MediaPipe hand landmark model (21 points)
 │   └── pose_landmarker_lite.task  ← MediaPipe pose landmark model (33 points)
@@ -117,14 +117,13 @@ The goal of collection is to build a sufficiently large and varied set of
 22-dimensional feature vectors (one row per capture) for each SASL letter.
 
 If your copy of the repo includes a `collect.py` helper, run that. If not,
-use the included `calibrate.py` — it performs the same capture: computing
+Use the included `calibrate.py` to capture training samples. It computes
 `build_feature_vector()` for any detected hand and appending a CSV row to
 `data/<LETTER>.csv`. `calibrate.py` additionally prints the observed
-min/max ranges for each run, which is useful for bootstrapping rule-based
-ranges in `sign_classifier.py`.
+min/max ranges for each run, which is useful for bootstrapping rule-based ranges in `sign_classifier.py`.
 
 Example (calibrate or collect):
-
+`train_and_export.py` which exports an ONNX model that `sign_classifier.py`
 ```bash
 MPLBACKEND=Agg python calibrate.py --letter F
 MPLBACKEND=Agg python calibrate.py --letter G --auto   # capture automatically
