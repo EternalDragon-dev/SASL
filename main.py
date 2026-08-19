@@ -11,7 +11,6 @@ Keys:
     Q  quit
 """
 
-import argparse
 import time
 from collections import Counter, deque  # deque = fixed-length ring buffer; Counter = frequency map
 
@@ -134,16 +133,7 @@ def main() -> None:
       2. Loop    — read frame → run models → draw → handle keys
       3. Cleanup — release webcam and close windows
     """
-    parser = argparse.ArgumentParser(description="Run the live SASL hand recognizer.")
-    parser.add_argument(
-        "--camera",
-        type=int,
-        default=1,
-        help="OpenCV camera index to use (default: 1; try 0 for another camera).",
-    )
-    args = parser.parse_args()
-
-    # Open the selected webcam and allow a short warm-up
+    # Open the default webcam (try indices 0 and 1) and allow a short warm-up
     # period because some cameras return an empty frame immediately after open.
     def open_and_warm(indices=(0, 1), warm_reads=10, delay=0.1):
         for idx in indices:
@@ -158,9 +148,9 @@ def main() -> None:
             cap.release()
         return None
 
-    cap = open_and_warm(indices=(args.camera,), warm_reads=10, delay=0.1)
+    cap = open_and_warm(indices=(0, 1), warm_reads=10, delay=0.1)
     if cap is None:
-        print(f"Error: Could not open webcam at camera index {args.camera}.")
+        print("Error: Could not open webcam (tried indices 0 and 1).")
         print("- Ensure Terminal/VS Code has Camera permission in macOS System Settings.")
         print("- Close other apps that may be using the camera (Zoom/FaceTime/Photo Booth).")
         return

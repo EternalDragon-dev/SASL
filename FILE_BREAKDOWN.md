@@ -63,11 +63,8 @@ Capabilities:
 - Prints a summary and a ready-to-paste rule block after quitting.
 
 Usage:
-- `MPLBACKEND=Agg python calibrate.py --letter A --camera 1`
-- `MPLBACKEND=Agg python calibrate.py --letter B --auto --camera 1`
-
-The `--camera` option selects the OpenCV device index. This is useful on macOS
-when an iPhone Continuity Camera appears before the Mac's built-in camera.
+- `MPLBACKEND=Agg python calibrate.py --letter A`
+- `MPLBACKEND=Agg python calibrate.py --letter B --auto`
 
 ## `main.py`
 

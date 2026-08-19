@@ -126,11 +126,7 @@ Example calibration commands:
 ```bash
 MPLBACKEND=Agg python calibrate.py --letter F
 MPLBACKEND=Agg python calibrate.py --letter G --auto   # capture automatically
-MPLBACKEND=Agg python calibrate.py --letter F --camera 1
 ```
-
-Use `--camera 1` for the Mac camera on this setup. Use `--camera 0` only when
-you intentionally want the other device, such as an iPhone Continuity Camera.
 
 Controls while running `calibrate.py`:
 
