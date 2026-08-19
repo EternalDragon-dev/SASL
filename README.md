@@ -122,14 +122,17 @@ Use the included `calibrate.py` to capture training samples. It computes
 `data/<LETTER>.csv`. `calibrate.py` additionally prints the observed
 min/max ranges for each run, which is useful for bootstrapping rule-based ranges in `sign_classifier.py`.
 
-Example (calibrate or collect):
-`train_and_export.py` which exports an ONNX model that `sign_classifier.py`
+Example calibration commands:
 ```bash
 MPLBACKEND=Agg python calibrate.py --letter F
 MPLBACKEND=Agg python calibrate.py --letter G --auto   # capture automatically
+MPLBACKEND=Agg python calibrate.py --letter F --camera 1
 ```
 
-Controls while running `calibrate.py`/`collect.py`:
+Use `--camera 1` for the Mac camera on this setup. Use `--camera 0` only when
+you intentionally want the other device, such as an iPhone Continuity Camera.
+
+Controls while running `calibrate.py`:
 
 - `SPACE` — Capture one sample (writes one row to `data/<LETTER>.csv`)
 - `A` — Toggle auto-capture (one sample every `0.5` seconds) while a hand is visible

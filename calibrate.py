@@ -86,6 +86,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Automatically capture one sample every 0.5 seconds.",
     )
+    parser.add_argument(
+        "--camera",
+        type=int,
+        default=1,
+        help="OpenCV camera index to use (default: 1; try 0 for another camera).",
+    )
     return parser.parse_args()
 
 
@@ -258,9 +264,9 @@ def main() -> None:
             cap.release()
         return None
 
-    cap = open_and_warm(indices=(0, 1), warm_reads=10, delay=0.1)
+    cap = open_and_warm(indices=(args.camera,), warm_reads=10, delay=0.1)
     if cap is None:
-        print("Error: could not open webcam (tried indices 0 and 1).")
+        print(f"Error: could not open webcam at camera index {args.camera}.")
         print("- Ensure the Camera permission is granted to Terminal/VS Code in macOS System Settings.")
         print("- Close other apps that may be using the camera (Zoom, FaceTime, Photo Booth).")
         return
