@@ -241,10 +241,28 @@ def main() -> None:
     # If auto mode is enabled, schedule the first automatic capture.
     next_auto_time = time.monotonic() + AUTO_INTERVAL if auto_capture else float("inf")
 
-    # Open the default camera (index 0). This must succeed before we proceed.
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        print("Error: could not open webcam.")
+    # Open the default camera (index 0). Allow a short warm-up period as some
+    # cameras may return an empty frame immediately after opening.
+    def open_and_warm(indices=(0, 1), warm_reads=10, delay=0.1):
+        for idx in indices:
+            cap = cv2.VideoCapture(idx)
+            if not cap.isOpened():
+                continue
+            # Try a few reads to let the camera initialize.
+            for _ in range(warm_reads):
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    return cap
+                time.sleep(delay)
+            # No good frame; release and try next index.
+            cap.release()
+        return None
+
+    cap = open_and_warm(indices=(0, 1), warm_reads=10, delay=0.1)
+    if cap is None:
+        print("Error: could not open webcam (tried indices 0 and 1).")
+        print("- Ensure the Camera permission is granted to Terminal/VS Code in macOS System Settings.")
+        print("- Close other apps that may be using the camera (Zoom, FaceTime, Photo Booth).")
         return
 
     # Configure MediaPipe's hand detector.
