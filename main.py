@@ -203,11 +203,18 @@ def main() -> None:
             ml_session, ml_label_names = None, None
             print(f"Warning: failed to load ML classifier: {exc}. Using rule-based classifier.")
 
+        failed_reads = 0
         while True:
             # ── Read frame ───────────────────────────────────────────────────
             ret, frame = cap.read()  # ret=False if webcam disconnects
-            if not ret:
-                break
+            if not ret or frame is None:
+                failed_reads += 1
+                if failed_reads >= 30:
+                    print("Error: webcam stopped providing frames.")
+                    break
+                time.sleep(0.05)
+                continue
+            failed_reads = 0
 
             # Mirror the image so hand movements feel natural (like a mirror)
             frame = cv2.flip(frame, 1)

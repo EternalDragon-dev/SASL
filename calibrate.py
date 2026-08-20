@@ -284,13 +284,19 @@ def main() -> None:
          open(output_path, "a", newline="") as csv_file:
         writer = csv.writer(csv_file)
         start_time = None
+        failed_reads = 0
 
         while True:
             # Read the next frame from the webcam.
             ret, frame = cap.read()
-            if not ret:
-                print("Error: webcam frame not read.")
-                break
+            if not ret or frame is None:
+                failed_reads += 1
+                if failed_reads >= 30:
+                    print("Error: webcam stopped providing frames.")
+                    break
+                time.sleep(0.05)
+                continue
+            failed_reads = 0
 
             # Mirror the frame so it feels like looking in a mirror.
             frame = cv2.flip(frame, 1)
