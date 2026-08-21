@@ -133,9 +133,9 @@ def main() -> None:
       2. Loop    — read frame → run models → draw → handle keys
       3. Cleanup — release webcam and close windows
     """
-    # Open the default webcam (try indices 0 and 1) and allow a short warm-up
-    # period because some cameras return an empty frame immediately after open.
-    def open_and_warm(indices=(0, 1), warm_reads=10, delay=0.1):
+    # Prefer the stable Mac camera (index 1) and keep index 0 as a fallback.
+    # Some Continuity Camera devices initially stream, then stop providing frames.
+    def open_and_warm(indices=(1, 0), warm_reads=10, delay=0.1):
         for idx in indices:
             cap = cv2.VideoCapture(idx)
             if not cap.isOpened():
@@ -148,9 +148,9 @@ def main() -> None:
             cap.release()
         return None
 
-    cap = open_and_warm(indices=(0, 1), warm_reads=10, delay=0.1)
+    cap = open_and_warm(indices=(1, 0), warm_reads=10, delay=0.1)
     if cap is None:
-        print("Error: Could not open webcam (tried indices 0 and 1).")
+        print("Error: Could not open webcam (tried indices 1 and 0).")
         print("- Ensure Terminal/VS Code has Camera permission in macOS System Settings.")
         print("- Close other apps that may be using the camera (Zoom/FaceTime/Photo Booth).")
         return

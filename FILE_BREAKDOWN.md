@@ -66,6 +66,9 @@ Usage:
 - `MPLBACKEND=Agg python calibrate.py --letter A`
 - `MPLBACKEND=Agg python calibrate.py --letter B --auto`
 
+On macOS, the camera helper tries index 1 before index 0. This prioritizes the
+Mac camera when an iPhone Continuity Camera is also connected.
+
 ## `main.py`
 
 Purpose:
@@ -73,7 +76,8 @@ Purpose:
 - Visualize hand landmarks and detected letters in a live window.
 
 Capabilities:
-- Opens the default webcam and a MediaPipe HandLandmarker model.
+- Opens a webcam, preferring camera index 1 before index 0, and a MediaPipe
+  HandLandmarker model.
 - Mirrors the webcam image and draws hand skeletons, fingertips, and palm center.
 - Computes joint angles and builds the 22D SASL feature vector every frame.
 - Attempts to load `models/sign_classifier.onnx` and use the ML classifier if available.
@@ -84,6 +88,8 @@ Capabilities:
 Notes:
 - This is the live application entrypoint.
 - It relies on the `sign_classifier` and `joint_angles` modules for feature extraction and classification.
+- Use Python 3.11 from `~/venvs/sasl311`; keep the environment outside iCloud
+  Drive so OpenCV's native libraries remain locally available.
 
 ## `train_and_export.py`
 

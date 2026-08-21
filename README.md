@@ -10,10 +10,9 @@ display. Written in Python.
 
 - Tracks up to 2 hands using MediaPipe's 21-point hand landmark model
 - Draws the hand skeleton, fingertip labels, and palm center on screen
-- Tracks both forearms using MediaPipe's 33-point pose landmark model
-- Recognises 6 gestures in real time (Gesture mode)
-- Recognises SASL fingerspelling letters using joint-angle classification (SASL mode)
-- Skeleton and forearm color changes to match the detected gesture/letter
+- Recognises SASL fingerspelling letters using joint-angle classification
+- Uses an exported ONNX classifier when available, with rule-based fallback
+- Smooths predictions across frames to reduce flicker
 
 ---
 
@@ -27,7 +26,6 @@ hand_gesture_recognizer_manual/
 ├── calibrate.py          ← data collection tool for SASL training samples
 ├── models/
 │   ├── hand_landmarker.task       ← MediaPipe hand landmark model (21 points)
-│   └── pose_landmarker_lite.task  ← MediaPipe pose landmark model (33 points)
 └── data/                 ← SASL training data goes here (one CSV per letter)
 ```
 
@@ -35,10 +33,22 @@ hand_gesture_recognizer_manual/
 
 ## Setup
 
-Install dependencies (once):
+Use the local Python 3.11 environment so compiled libraries are stored outside
+iCloud Drive. The project code and data can remain in iCloud Drive.
+
+Create the environment once:
 
 ```bash
-pip install mediapipe opencv-python numpy
+brew install python@3.11
+/opt/homebrew/bin/python3.11 -m venv ~/venvs/sasl311
+~/venvs/sasl311/bin/python -m pip install --upgrade pip setuptools wheel
+~/venvs/sasl311/bin/python -m pip install opencv-python mediapipe numpy scikit-learn pandas joblib skl2onnx onnx onnxruntime
+```
+
+Activate it for each session:
+
+```bash
+source ~/venvs/sasl311/bin/activate
 ```
 
 ---
@@ -47,12 +57,13 @@ pip install mediapipe opencv-python numpy
 
 ```bash
 cd ~/Library/Mobile\ Documents/com~apple~CloudDocs/Documents/Personal_Projects/hand_gesture_recognizer_manual
+source ~/venvs/sasl311/bin/activate
 MPLBACKEND=Agg python main.py
 ```
 
-> `MPLBACKEND=Agg` is required on macOS to prevent matplotlib (a MediaPipe
-> dependency) from trying to open a display during its font scan, which hangs
-> the app before the webcam window opens.
+> `MPLBACKEND=Agg` avoids matplotlib display initialization during startup.
+> On this Mac, the app tries camera index 1 first because index 0 may be the
+> iPhone Continuity Camera and can stop providing frames after a short time.
 
 ---
 
@@ -60,28 +71,11 @@ MPLBACKEND=Agg python main.py
 
 | Key | Action |
 |-----|--------|
-| `M` | Toggle between GESTURE mode and SASL mode |
 | `Q` | Quit |
 
 ---
 
 ## How the classification pipeline works
-
-### Gesture mode
-
-Each frame, `classify_gesture(lms)` evaluates a set of boolean rules based
-on landmark y-coordinates:
-
-- **Extended finger**: `tip.y < pip.y` (tip is higher in the frame = smaller y)
-- **Thumb up**: tip clears both the thumb MCP and the index knuckle
-- **Thumb lateral**: tip is meaningfully left of the IP joint (> 4% of frame width)
-
-Rules are checked in order — most specific first — and the first match wins.
-This is why Thumbs Up is checked before Fist (both have all four fingers curled).
-
-Detected gestures: Thumbs Up, Peace, Rock On, Pointing, Fist, Open Hand.
-
-### SASL mode
 
 SASL (South African Sign Language) letter classification uses a richer
 feature set than simple y-comparisons, making it more robust to hand rotation:
@@ -116,9 +110,8 @@ data (see below).
 The goal of collection is to build a sufficiently large and varied set of
 22-dimensional feature vectors (one row per capture) for each SASL letter.
 
-If your copy of the repo includes a `collect.py` helper, run that. If not,
 Use the included `calibrate.py` to capture training samples. It computes
-`build_feature_vector()` for any detected hand and appending a CSV row to
+`build_feature_vector()` for any detected hand and appends a CSV row to
 `data/<LETTER>.csv`. `calibrate.py` additionally prints the observed
 min/max ranges for each run, which is useful for bootstrapping rule-based ranges in `sign_classifier.py`.
 
@@ -149,8 +142,13 @@ hand rotations, slight translations, and natural variation (pressure,
 minor movement) to make the ML classifier robust.
 
 Once enough data is collected, train the ML classifier using
-`train_classifier.py` (in the Archives folder) which exports an ONNX model
-that `sign_classifier.py` can load automatically.
+`train_and_export.py`, which writes the joblib fallback, validation metrics,
+label mapping, and an ONNX model that `sign_classifier.py` can load.
+
+```bash
+source ~/venvs/sasl311/bin/activate
+python train_and_export.py
+```
 
 How to test how well calibration worked
 ---------------------------------------
@@ -188,10 +186,9 @@ PY
 MPLBACKEND=Agg python main.py
 ```
 
-    - Switch to SASL / fingerspelling mode (press `M` if available), hold the
-       target letter shape and observe whether the classifier displays the
-       correct letter and confidence above the palm. Move the hand slightly to
-       verify stability across frames (voting buffer reduces flicker).
+      - Hold the target letter shape and observe whether the classifier displays
+         the correct letter and confidence above the palm. Move the hand slightly
+         to verify stability across frames (the voting buffer reduces flicker).
 
 4. Quantitative validation (best):
     - Collect a labelled validation set: for each letter, record a set of
@@ -270,7 +267,7 @@ to Swift or Kotlin while Python continues to handle model training.
 ## Next steps
 
 - [ ] Collect training data for the remaining 14 SASL letters
-- [ ] Train the ML classifier (`train_classifier.py`)
+- [ ] Train the ML classifier (`train_and_export.py`)
 - [ ] Implement accuracy improvements: rotation-invariant finger extension,
       hysteresis on gesture transitions
 - [ ] Add sequence classification for motion letters J and Z
