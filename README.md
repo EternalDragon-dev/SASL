@@ -1,8 +1,17 @@
-# Hand Gesture Recognizer — Manual Build
+# SASL Handshape Recognizer
 
-A real-time hand gesture and SASL fingerspelling recognizer built manually
-as a learning exercise. Uses MediaPipe for landmark detection and OpenCV for
-display. Written in Python.
+A real-time South African Sign Language (SASL) handshape recognizer built as a
+learning project. It uses MediaPipe for landmark detection, OpenCV for the
+camera and display, and a small ONNX model for static handshape inference.
+
+The next development stage is documented in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). It specifies how to add
+temporal segmentation, motion letters, completed letter events, words, and
+optional token-based suggestions without requiring a local LLM.
+
+For a fresh planning perspective that assumes the static foundation is
+complete but treats all sequence work as unimplemented, see
+[IMPLEMENTATION_PLAN_FROM_SCRATCH.md](IMPLEMENTATION_PLAN_FROM_SCRATCH.md).
 
 ---
 
@@ -13,6 +22,15 @@ display. Written in Python.
 - Recognises SASL fingerspelling letters using joint-angle classification
 - Uses an exported ONNX classifier when available, with rule-based fallback
 - Smooths predictions across frames to reduce flicker
+- Keeps the Python environment outside iCloud Drive for native-library stability
+
+Current scope:
+
+- Static letter recognition is implemented.
+- J and Z require trajectory recognition and are planned next.
+- Word and sentence recognition are not yet implemented.
+- Language-model suggestions are optional future functionality, not required by
+   the recognition pipeline.
 
 ---
 
@@ -24,6 +42,9 @@ hand_gesture_recognizer_manual/
 ├── joint_angles.py       ← computes 15 joint flexion angles from hand landmarks
 ├── sign_classifier.py    ← 22-dim feature vector + rule-based SASL letter classifier
 ├── calibrate.py          ← data collection tool for SASL training samples
+├── train_and_export.py   ← trains and exports the static classifier
+├── IMPLEMENTATION_PLAN.md← temporal, motion, word, and token roadmap
+├── IMPLEMENTATION_PLAN_FROM_SCRATCH.md ← fresh-start sequence plan
 ├── models/
 │   ├── hand_landmarker.task       ← MediaPipe hand landmark model (21 points)
 └── data/                 ← SASL training data goes here (one CSV per letter)
@@ -98,10 +119,35 @@ feature set than simple y-comparisons, making it more robust to hand rotation:
    ring buffer (`deque`). A letter is only displayed if it wins a majority
    vote (≥ 7 of 14 frames), which filters out single-frame noise.
 
-Currently rule-based letters: **A, B, C, D, E, I, L, O, W, Y**
+The rule-based path is a conservative fallback. The trained ONNX model covers
+the calibrated static letters listed in `models/sign_classifier_labels.json`.
+J and Z are motion letters and must be handled by a temporal trajectory
+classifier rather than by one 22-dimensional static vector.
 
-The remaining 14 static letters require an ML classifier trained on collected
-data (see below).
+### Planned sequence pipeline
+
+The current voting buffer smooths frames; it does not know when a letter is
+complete. The planned Recommendation 6 architecture adds this separation:
+
+```text
+MediaPipe landmarks
+   -> temporal features (palm position, velocity, speed)
+   -> boundary state machine
+   -> static classifier or J/Z trajectory classifier
+   -> completed letter event
+   -> word buffer
+   -> optional token suggestions
+```
+
+The first sequence milestone is a reliable event stream such as:
+
+```text
+LETTER(A), LETTER(B), LETTER(J), WORD_END
+```
+
+The complete implementation sequence, thresholds, data formats, tests,
+metrics, and escalation options are in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ---
 
@@ -211,16 +257,20 @@ If the rule-based classifier underperforms on many samples, you either
 need to widen the rule ranges (use the printed calibration block) or
 collect more data and train the ML classifier.
 
-## More detailed code breakdown
+## Learning model
 
-For a file-by-file description of the repository source code, see
-[`FILE_BREAKDOWN.md`](FILE_BREAKDOWN.md).
+The project separates four ideas:
 
-## Learn the math and ML behind this project
+1. **Detection**: MediaPipe turns camera pixels into 21 hand landmarks.
+2. **Features**: geometry turns landmarks into angles and normalized distances.
+3. **Recognition**: rules or a trained classifier map features to static letters.
+4. **Sequence prediction**: temporal logic finds boundaries; optional token
+   models suggest likely words or sentences.
 
-If you want a student-friendly explanation of the geometry, machine
-learning, and Python libraries used in this project, see
-[`EDUCATION.md`](EDUCATION.md).
+A local LLM is not needed for the first three steps or for the initial
+prefix-dictionary suggestion layer. This distinction is important: the
+handshape classifier is machine learning for numeric features, while a
+language model predicts sequences of letters or words.
 
 ---
 
@@ -266,9 +316,13 @@ to Swift or Kotlin while Python continues to handle model training.
 
 ## Next steps
 
-- [ ] Collect training data for the remaining 14 SASL letters
-- [ ] Train the ML classifier (`train_and_export.py`)
-- [ ] Implement accuracy improvements: rotation-invariant finger extension,
-      hysteresis on gesture transitions
-- [ ] Add sequence classification for motion letters J and Z
-- [ ] Add arm location features for full SASL sign recognition
+See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full checklist.
+The immediate order is:
+
+- [ ] Add temporal observations and normalized palm velocity
+- [ ] Add and test the letter/word boundary state machine
+- [ ] Emit completed static letter events through the existing classifier
+- [ ] Add J/Z trajectory collection and template matching
+- [ ] Add a word buffer and explicit word-boundary handling
+- [ ] Add prefix suggestions without an LLM
+- [ ] Evaluate whether an n-gram or neural language model is justified
