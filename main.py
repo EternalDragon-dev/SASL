@@ -11,6 +11,7 @@ Keys:
     Q  quit
 """
 
+import math
 import time
 from collections import Counter, deque  # deque = fixed-length ring buffer; Counter = frequency map
 
@@ -30,6 +31,8 @@ from sign_classifier import (
     load_ml_classifier,
     classify_static_ml,
 )
+from sequence_classifier import FrameObservation, SequenceClassifier
+from word_buffer import WordBuffer
 
 # ── Model paths ───────────────────────────────────────────────────────────────
 # These .task files are pre-trained MediaPipe neural network models.
@@ -182,6 +185,18 @@ def main() -> None:
         "Right": deque(maxlen=LETTER_HISTORY),
     }
 
+    # Recommendation 6: convert stable held segments into completed letter events
+    # and accumulate the in-progress word before a manual or pause-based commit.
+    sequence_classifier = SequenceClassifier(
+        min_segment_frames=5,
+        min_confidence=0.60,
+        low_speed_threshold=35.0,
+        pause_frames_for_boundary=3,
+        duplicate_cooldown=2.0,
+    )
+    word_buffer = WordBuffer()
+    previous_hand_state: dict[str, tuple[float, float, float]] = {}
+
     # `with` ensures the MediaPipe model is cleanly released when the block exits.
     # The hand landmarker holds model resources and must be closed to avoid leaks.
     with mp_vision.HandLandmarker.create_from_options(options) as landmarker:
@@ -286,6 +301,38 @@ def main() -> None:
                             sasl_letter = top_letter
                             sasl_conf   = raw[1] if raw else 0.0
 
+                    # Recommendation 6 adds event-based completion: a stable segment
+                    # becomes one letter event, not a repeated raw-frame vote.
+                    current_ts = float(timestamp_ms) / 1000.0
+                    prev_state = previous_hand_state.get(label)
+                    speed = 0.0
+                    if prev_state is not None:
+                        prev_t, prev_x, prev_y = prev_state
+                        dt = max(current_ts - prev_t, 1e-3)
+                        dx = pcx - prev_x
+                        dy = pcy - prev_y
+                        speed = math.hypot(dx, dy) / dt
+
+                    observation = FrameObservation(
+                        timestamp=current_ts,
+                        hand_label=label,
+                        palm_x=float(pcx),
+                        palm_y=float(pcy),
+                        palm_z=0.0,
+                        velocity_x=float(pcx - prev_state[1]) if prev_state is not None else 0.0,
+                        velocity_y=float(pcy - prev_state[2]) if prev_state is not None else 0.0,
+                        velocity_z=0.0,
+                        speed=speed,
+                        feature_vector=fv,
+                        static_prediction=raw[0] if raw else None,
+                        static_confidence=raw[1] if raw else 0.0,
+                    )
+                    previous_hand_state[label] = (current_ts, float(pcx), float(pcy))
+                    completed_letter = sequence_classifier.observe(observation)
+                    if completed_letter is not None:
+                        word_buffer.add_letter(completed_letter.label)
+                        print(f"Recognized letter event: {completed_letter.label} ({completed_letter.confidence:.2f})")
+
                     # Skeleton turns gold when a letter is detected, cyan otherwise
                     skel_color = COLOR_ACTIVE if sasl_letter else COLOR_CONNECTION
                     draw_hand(frame, lms, w, h, skel_color)
@@ -300,14 +347,24 @@ def main() -> None:
                                     (pcx - 22, pcy - 20),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, COLOR_ACTIVE, 2, cv2.LINE_AA)
 
+                    if word_buffer.current_word:
+                        cv2.putText(frame, word_buffer.current_word,
+                                    (20, 40),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, COLOR_LABEL, 2, cv2.LINE_AA)
+
                     cv2.putText(frame, f"{label} hand",
                                 (pcx - 35, pcy + 30),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, COLOR_LABEL, 2, cv2.LINE_AA)
 
             # ── Display and key handling ──────────────────────────────────────
             cv2.imshow("SASL Recognizer", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
                 break
+            if key == ord(" "):
+                committed = word_buffer.commit_current_word()
+                if committed:
+                    print(f"Committed word: {committed}")
 
     # ── Cleanup ───────────────────────────────────────────────────────────────
     # Always release the webcam and destroy windows — even after a break or error

@@ -1020,6 +1020,10 @@ High frame accuracy alone would not prove that word recognition worked.
 
 ## 22. Final Project State at the Planning Boundary
 
+This section is a historical snapshot, not the live repository status. At the
+time this document was written, motion capture, motion-template export, and
+the standalone webcam motion demo had not yet been created.
+
 The project had successfully reached the static recognition milestone:
 
 ```text
@@ -1054,3 +1058,15 @@ Next work not yet started:
 ```
 
 The system was not to be described as a word or sentence recognizer until those temporal stages had been implemented and evaluated.
+
+### Current status after this historical boundary
+
+Since this plan was written, the repository has added:
+
+- temporal boundary and sequence modules
+- ordered motion capture in `motion_calibrate.py`
+- normalized motion-template export in `train_motion_templates.py`
+- a live standalone motion demo in `motion_demo.py`
+
+The main recognizer still needs live integration of motion templates, broader
+H/J/P/Q/Z sample validation, automatic word boundaries, and token suggestions.

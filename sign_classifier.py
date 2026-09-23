@@ -63,8 +63,11 @@ import numpy as np
 from joint_angles import compute_joint_angles
 
 # ── SASL label set ─────────────────────────────────────────────────────────
-# J and Z are motion-based in SASL and are handled by the sequence classifier
-# (Phase 3). All other letters are treated as static handshapes here.
+# Motion-based letters are not limited to J and Z in the final architecture.
+# Letters such as H, J, P, Q, and Z may require trajectory-aware calibration
+# and should be routed through the sequence classifier's motion path when their
+# identity depends on movement rather than a single static pose.
+# All other letters are treated as static handshapes here.
 STATIC_LABELS: list[str] = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I",
     # "J" — motion sign → sequence_classifier.py

@@ -27,7 +27,8 @@ complete but treats all sequence work as unimplemented, see
 Current scope:
 
 - Static letter recognition is implemented.
-- J and Z require trajectory recognition and are planned next.
+- A motion-aware subset of letters—including H, J, P, Q, and Z—requires
+  trajectory recognition and must be calibrated explicitly.
 - Word and sentence recognition are not yet implemented.
 - Language-model suggestions are optional future functionality, not required by
    the recognition pipeline.
@@ -42,6 +43,10 @@ hand_gesture_recognizer_manual/
 ├── joint_angles.py       ← computes 15 joint flexion angles from hand landmarks
 ├── sign_classifier.py    ← 22-dim feature vector + rule-based SASL letter classifier
 ├── calibrate.py          ← data collection tool for SASL training samples
+├── motion_calibrate.py   ← ordered trajectory capture for motion letters
+├── motion_classifier.py  ← trajectory normalization and template matching
+├── train_motion_templates.py ← exports captured motion templates
+├── motion_demo.py        ← live webcam demo for motion templates
 ├── train_and_export.py   ← trains and exports the static classifier
 ├── IMPLEMENTATION_PLAN.md← temporal, motion, word, and token roadmap
 ├── IMPLEMENTATION_PLAN_FROM_SCRATCH.md ← fresh-start sequence plan
@@ -121,8 +126,10 @@ feature set than simple y-comparisons, making it more robust to hand rotation:
 
 The rule-based path is a conservative fallback. The trained ONNX model covers
 the calibrated static letters listed in `models/sign_classifier_labels.json`.
-J and Z are motion letters and must be handled by a temporal trajectory
-classifier rather than by one 22-dimensional static vector.
+The motion subset is not limited to J and Z in the final design: letters such as
+H, J, P, Q, and Z must be checked against live motion data and routed to a
+trajectory-aware classifier when appropriate rather than forced into one static
+22-dimensional vector.
 
 ### Planned sequence pipeline
 
@@ -133,7 +140,7 @@ complete. The planned Recommendation 6 architecture adds this separation:
 MediaPipe landmarks
    -> temporal features (palm position, velocity, speed)
    -> boundary state machine
-   -> static classifier or J/Z trajectory classifier
+   -> static classifier or motion-letter trajectory classifier
    -> completed letter event
    -> word buffer
    -> optional token suggestions
@@ -166,6 +173,43 @@ Example calibration commands:
 MPLBACKEND=Agg python calibrate.py --letter F
 MPLBACKEND=Agg python calibrate.py --letter G --auto   # capture automatically
 ```
+
+Motion-letter calibration uses a separate ordered-sequence format. Do not put
+motion trajectories in the static `data/<LETTER>.csv` files. Start the motion
+recorder, press `SPACE` to begin a gesture, perform the motion, then press
+`SPACE` again to save the sequence:
+
+```bash
+MPLBACKEND=Agg python motion_calibrate.py --letter J
+MPLBACKEND=Agg python motion_calibrate.py --letter Z
+```
+
+The same recorder can be used for H, P, and Q while their motion/static status
+is being validated. Samples are written to `motion_data/<LETTER>/sample_*.csv`.
+The current `motion_classifier.py` provides offline trajectory normalization and
+template matching; live integration into the sequence coordinator is still
+pending.
+
+After collecting motion samples, export them with:
+
+```bash
+python train_motion_templates.py
+```
+
+This creates `models/motion_templates.npz`. Unlike the static classifier, this
+is a normalized template artifact rather than an ONNX model. It can be tested
+offline with `motion_classifier.classify_trajectory()` and will be connected to
+the live sequence coordinator in the next integration step.
+
+To try the exported motion templates yourself through the webcam:
+
+```bash
+python motion_demo.py
+```
+
+Press `SPACE`, perform one recorded motion, then press `SPACE` again. The demo
+will display the closest motion label and confidence, or reject the trajectory
+when no template is close enough. Press `Q` to quit.
 
 Controls while running `calibrate.py`:
 
@@ -319,10 +363,11 @@ to Swift or Kotlin while Python continues to handle model training.
 See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the full checklist.
 The immediate order is:
 
-- [ ] Add temporal observations and normalized palm velocity
-- [ ] Add and test the letter/word boundary state machine
-- [ ] Emit completed static letter events through the existing classifier
-- [ ] Add J/Z trajectory collection and template matching
-- [ ] Add a word buffer and explicit word-boundary handling
+- [x] Add initial temporal observations and boundary logic
+- [x] Emit completed static letter events through the existing classifier
+- [x] Add ordered motion capture, template export, and a live motion demo
+- [ ] Collect and validate motion samples for H, J, P, Q, and Z
+- [ ] Connect motion templates to the main sequence coordinator
+- [ ] Tune live letter transitions and automatic word boundaries
 - [ ] Add prefix suggestions without an LLM
 - [ ] Evaluate whether an n-gram or neural language model is justified

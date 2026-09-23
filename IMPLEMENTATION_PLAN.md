@@ -49,7 +49,7 @@ The static feature vector is:
 [21]    ring-pinky spread angle
 ```
 
-The current static classifier covers the calibrated static letters. J and Z are motion-based and must not be forced into the static classifier.
+The current static classifier covers the calibrated static letters. The motion subset is broader than a J/Z-only assumption: letters such as H, J, P, Q, and Z must be validated against trajectory data and must not be forced into the static classifier unless they are proven to be pose-based in the chosen SASL variant.
 
 ### Important distinction
 
@@ -84,7 +84,7 @@ word buffer displays ABJ once
 - Smoothed movement signals
 - Rule-based letter and word boundary detection
 - Static segment classification using the existing ONNX model
-- A first J/Z trajectory classifier using templates
+- A motion-letter classifier for the dynamic subset (at minimum J/Z, and likely H/P/Q depending on calibration)
 - Completed letter events
 - Word buffering and explicit word commit
 - Offline replay and unit testing
@@ -194,7 +194,9 @@ sequence_classifier.py
         |      existing static feature/classifier path
         |
         +--> motion_classifier.py
-               J/Z trajectory normalization and matching
+               motion-letter trajectory normalization and matching
+         +--> motion_calibrate.py / train_motion_templates.py
+             ordered capture and template artifact export
         |
         v
 RecognizedLetter events
@@ -529,9 +531,11 @@ The sequence layer should call these functions, not duplicate their feature logi
 
 ---
 
-## 11. Stage 5: Motion Classification for J and Z
+## 11. Stage 5: Motion Classification for Dynamic Letters
 
-J and Z cannot be reliably recognized from a single static vector. Their identity is in the trajectory.
+A letter subset including J and Z, and possibly H, P, and Q depending on calibration, cannot be reliably recognized from a single static vector. Their identity is in the trajectory.
+
+The first implementation must treat this as a motion-letter calibration problem, not a J/Z-only assumption. The exact dynamic subset should be determined from live data, but the project should be structured to support a motion classifier for the dynamic letters rather than attempting to force them into the static pipeline.
 
 ### First method: template matching
 
@@ -555,7 +559,7 @@ The lowest distance wins if it is below a rejection threshold.
 
 ### Motion data collection
 
-Add a dedicated collection mode rather than putting motion sequences into the existing static CSV format. A motion sample needs ordered frames, not an unordered collection of independent rows.
+Add a dedicated collection mode rather than putting motion sequences into the existing static CSV format. The project now provides `motion_calibrate.py`; a motion sample uses ordered frames, not an unordered collection of independent rows.
 
 Suggested format:
 
@@ -573,6 +577,11 @@ Each row should include:
 ```text
 timestamp,palm_x,palm_y,palm_z,index_x,index_y,index_z,hand_scale
 ```
+
+The current recorder writes timestamped palm and index trajectories with hand
+scale and frame order. The current template utilities normalize and compare
+those trajectories offline. Live sequence integration and real sample
+collection remain later milestones.
 
 Collect at least 30 to 50 examples per motion letter initially, across:
 
@@ -789,15 +798,15 @@ Acceptance: `A`, `P`, `P`, `L`, `E`, followed by a boundary, produces one commit
 ### Milestone 5: Collect and classify motion letters
 
 1. Extend or add a motion collection tool.
-2. Store ordered trajectory files for J and Z.
+2. Store ordered trajectory files for the validated dynamic subset, beginning with H, J, P, Q, and Z.
 3. Normalize and resample trajectories.
 4. Implement template distance.
 5. Add a rejection threshold.
-6. Test J and Z offline first.
+6. Test each collected dynamic letter offline first.
 7. Connect motion classification to segment finalization.
 8. Emit `segment_type="motion"` events.
 
-Acceptance: held static letters still route to the static classifier, while recorded J/Z trajectories route to the motion classifier.
+Acceptance: held static letters still route to the static classifier, while recorded dynamic trajectories route to the motion classifier.
 
 ### Milestone 6: Add prefix suggestions
 
@@ -870,7 +879,7 @@ Do not depend on a live webcam for regression tests.
 3. Fingerspell two letters.
 4. Fingerspell repeated letters such as `LL` or `PP`.
 5. Add deliberate pauses.
-6. Test J and Z.
+6. Test H, J, P, Q, and Z as motion candidates.
 7. Test a short word.
 8. Test a longer word.
 9. Test word boundaries.
@@ -977,7 +986,7 @@ The first Recommendation 6 implementation is complete when:
 - [ ] Boundary detection is implemented as a tested state machine.
 - [ ] A held static letter emits one completed event.
 - [ ] Static segments reuse the existing ONNX/rule classifier.
-- [ ] J and Z have ordered trajectory data and a first classifier.
+- [ ] The validated dynamic subset has ordered trajectory data and a first classifier.
 - [ ] Motion segments route to the motion classifier.
 - [ ] Letter events feed a word buffer.
 - [ ] Word boundaries can be tested with `Space` and detected by timeout.
